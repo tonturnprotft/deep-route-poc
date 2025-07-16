@@ -1,0 +1,23 @@
+# ---- Python / build ----
+__pycache__/
+*.py[cod]
+*.so
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+
+# ---- macOS ----
+.DS_Store
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+
+# ---- Local experiment outputs ----
+/data/
+/checkpoints/
+/logs/
+/run_configs/
+/reports/
+/tmp/
