@@ -77,25 +77,25 @@ The full preprocessing + training flow is shown below.
 
 ```mermaid
 flowchart TD
-    A[Raw Geolife .plt files] --> B[Convert to CSV]
-    B --> C[Resample<br/>uniform timestep]
-    C --> D[Bounding box<br/>+ timestamp scan]
-    D --> E[Fetch ERA5-Land<br/>NetCDF by month<br/>cache locally]
-    E --> F[Interpolate weather<br/>to trajectory points]
-    F --> G[traj_weather.parquet]
+    A["Raw Geolife .plt files"] --> B["Convert to CSV"]
+    B --> C["Resample<br/>uniform timestep"]
+    C --> D["Bounding box<br/>+ timestamp scan"]
+    D --> E["Fetch ERA5-Land NetCDF<br/>cache locally"]
+    E --> F["Interpolate weather<br/>to trajectory points"]
+    F --> G["traj_weather.parquet"]
 
-    G --> H[Encode grid cells<br/>(coarse meter grid)]
-    H --> I[Build fixed-length<br/>sequences WIN=8]
-    I --> J[HDF5 chunked write<br/>sequences.h5]
-    J --> K[Remap sparse IDs<br/>→ contiguous 0..N]
-    K --> L[sequences_remap.h5]
+    G --> H["Encode grid cells<br/>(coarse meter grid)"]
+    H --> I["Build fixed-length sequences<br/>WIN=8"]
+    I --> J["HDF5 chunked write<br/>sequences.h5"]
+    J --> K["Remap sparse IDs<br/>contiguous 0..N"]
+    K --> L["sequences_remap.h5"]
 
-    L --> M[Chronological split<br/>Train / Val]
-    M --> N[Subsample Train (N)<br/>MacBook-friendly]
-    N --> O[Train LSTM]
-    M --> P[Validation Loader]
-    O --> Q[Checkpoints route_epoch*.pt]
-    Q --> R[Evaluation_last_epoch.py<br/>Top-K, Weather Ablation,<br/>Warm vs Cold]
+    L --> M["Chronological split<br/>Train / Val"]
+    M --> N["Subsample Train (N)<br/>MacBook-friendly"]
+    N --> O["Train LSTM"]
+    M --> P["Validation Loader"]
+    O --> Q["Checkpoints<br/>route_epoch*.pt"]
+    Q --> R["Evaluation_last_epoch.py<br/>Top-K, Weather Ablation,<br/>Warm vs Cold"]
 ```
 
 ---
