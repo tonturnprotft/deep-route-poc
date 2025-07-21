@@ -2,7 +2,7 @@
 
 This repository contains *code only* for the Deep-Route Proof of Concept — an
 LSTM-based next-location / route recommendation experiment that integrates
-Geolife GPS trajectories with ERA5-Land weather data.
+Porto Taxi trajectories with ERA5‑Land weather data.
 
 **Large data files and model checkpoints are NOT included** in this repository.
 See the Data Preparation section below to rebuild them from public sources.
@@ -16,9 +16,9 @@ See the Data Preparation section below to rebuild them from public sources.
 - [Data Sources](#data-sources)
 - [End-to-End Pipeline](#end-to-end-pipeline)
   - [0. Environment Setup](#0-environment-setup)
-  - [1. Download Geolife Raw](#1-download-geolife-raw)
-  - [2. Convert/Standardize Geolife to CSV](#2-convertstandardize-geolife-to-csv)
-  - [3. Resample + Clean GPS](#3-resample--clean-gps)
+  - [1. Filter Porto Raw](#1-filter-porto-raw)
+  - [2. Clip/Down‑sample](#2-clipdown-sample)
+  - [3. Expand Trips & Grid Encode](#3-expand-trips--grid-encode)
   - [4. Fetch ERA5-Land Weather](#4-fetch-era5-land-weather)
   - [5. Merge Trajectory + Weather](#5-merge-trajectory--weather)
   - [6. Build Sequences (Streaming)](#6-build-sequences-streaming)
@@ -37,12 +37,12 @@ See the Data Preparation section below to rebuild them from public sources.
 - [Next Steps & Extensions](#next-steps--extensions)
 - [Repository Layout](#repository-layout)
 - [Citations & Acknowledgements](#citations--acknowledgements)
+- [Weather Integration Details](#weather-integration-details)
+- [Git Workflow](#git-workflow)
 
 ---
 
 ## Quick Start
-
-> **Goal:** set up environment, install deps, and run training + evaluation assuming you have already rebuilt data artifacts (`data/...`) locally.
 
 ```bash
 # 1. Create & activate virtual environment
@@ -52,11 +52,11 @@ source .venv/bin/activate
 # 2. Install dependencies
 pip install -r requirements.txt
 
-# 3. Train (example: 8M subsample, window=8, Mac MPS accel)
+# 3. Train (example: 8 M subsample, win=8, Apple M‑series)
 python src/models/train_route_lstm.py \
-  --h5 data/processed/sequences_remap.h5 \
-  --train-idx data/splits/train_idx.npy \
-  --val-idx   data/splits/val_idx.npy \
+  --h5 data/processed/porto_sequences_win10.h5 \
+  --train-idx data/splits/porto_win10/train_idx.npy \
+  --val-idx   data/splits/porto_win10/val_idx.npy \
   --subsample-train 8000000 \
   --n-cells 92741 \
   --win 8 \
@@ -64,9 +64,20 @@ python src/models/train_route_lstm.py \
   --epochs 5 \
   --device mps
 
-# 4. Evaluate latest checkpoint (Top-K + weather ablation + warm/cold stats)
-python evaluation_last_epoch.py
+# 4. Quick sanity‑check evaluation on validation slice
+python evaluation_route_lstm.py
 
+# 5. Full benchmark across Combined/Warm/Cold splits + PNG plot
+python scripts/eval_and_plot.py \
+  --h5 data/processed/porto_sequences_win10.h5 \
+  --ckpt checkpoints/route_epoch7.pt \
+  --idx-files \
+        data/splits/porto_win10/test_idx.npy \
+        data/splits/porto_win10/warm_test_idx.npy \
+        data/splits/porto_win10/cold_idx.npy \
+  --labels Combined Warm Cold \
+  --out   eval_route_epoch7.png \
+  --device mps
 ```
 ---
 
@@ -76,7 +87,7 @@ The system builds fixed-length history windows from user GPS traces and predicts
 
 High-level flow:
 ```bash
-Geolife raw GPS  ─┐
+Porto raw GPS  ─┐
                   ├── Resample / clean / grid encode ─┐
 ERA5-Land weather ┘                                   ├── Merge
                                                       ├── Build sequences (HDF5)
@@ -90,16 +101,16 @@ ERA5-Land weather ┘                                   ├── Merge
 
 | Dataset | Description | Columns Used | Use in Project | Notes |
 |---|---|---|---|---|
-| [Geolife GPS Trajectories][geolife] | GPS traces from volunteer users (Microsoft Research Asia, 2007–2012) | `user_id`, `timestamp`, `lat`, `lon`, (optional speed/alt if present) | Core sequential movement signal; becomes training history cells | Highly irregular sampling; quality varies by user; need resample + filtering. |
+| [Porto Taxi Trajectory][porto] | 1‑year GPS traces from ~442 taxis in Porto, Portugal (2013/07 – 2014/07) | `taxi_id`, `timestamp`, `lat`, `lon` | Core sequential movement signal; becomes training history cells | Already regular 15‑second sampling; requires year filter, grid encoding, trip expansion & down‑sampling |
 | [ERA5-Land][era5] | Hourly global reanalysis (temperature, precipitation, etc.) | `t2m` (2m air temp), `tp` (total precipitation), others optional | Weather context joined to each GPS row (temporal + bilinear spatial interpolation) | Download large monthly NetCDF; convert Kelvin→°C; precipitation unit scaling required. |
 
-[geolife]: https://www.microsoft.com/en-us/research/publication/geolife-gps-trajectory-dataset-user-guide/ "Geolife dataset"
+[porto]: https://www.kaggle.com/datasets/andresionek/porto-taxi-trip-dataset "Porto Taxi Trajectory dataset"
 [era5]: https://cds.climate.copernicus.eu/#!/search?type=dataset&text=ERA5-Land "ERA5-Land on CDS"
 ---
 ## End-to-End Pipeline
 
 ```bash
-Download Geolife  ─┐
+Download Porto raw CSV  ─┐
                    ├─► Resample trajectories (regular timestep)
                    │
                    │     ┌─ Download ERA5-Land monthly NetCDF (bbox from traj + buffer)
@@ -164,22 +175,36 @@ PROJ=.
 DATA=$PROJ/data
 mkdir -p $DATA/raw $DATA/external $DATA/interim $DATA/processed $DATA/splits
 ```
-### 1.Download Geolife (or place manually)
-(Script simplified; if you already have it, skip.)
+### 1. Filter & Prepare Porto Dataset
+
 ```bash
-python src/data/convert_geolife_to_csv.py \
-  --raw  data/raw/geolife_trajectories_1.3 \
-  --out  data/interim/traj_raw.parquet
+# Filter to the study period (2013‑07 → 2014‑06)
+python src/data/porto_filter_year.py \
+  --in-csv data/raw/taxi_porto.csv \
+  --out    data/interim/porto_1yr.csv
+
+# Optional: clip / down‑sample for rapid experiments
+python src/data/porto_clip_downsample.py \
+  --in-csv  data/interim/porto_1yr.csv \
+  --out     data/interim/porto_clipped.csv \
+  --ratio   0.4
 ```
-### 2. Resample Trajectories (regular timestep)
 
-> If your conversion script already resampled, skip. Otherwise use notebook or create a resample script.
+### 2. Expand Trips & Grid‑Encode
 
-Expected output: data/interim/traj_resampled.parquet with:\
-	•	user_id\
-	•	timestamp (regular spacing, e.g., 1–5 min)\
-	•	lat, lon
-### 3.Fetch + Merge ERA5-Land Weather
+```bash
+# Convert polyline trips to per‑point rows, then grid‑encode lat/lon
+python src/data/porto_expand_trips.py \
+  --in-csv  data/interim/porto_clipped.csv \
+  --out     data/interim/traj_raw.parquet
+
+python src/data/porto_grid_encode.py \
+  --in-parquet  data/interim/traj_raw.parquet \
+  --out-parquet data/interim/traj_grid.parquet \
+  --cell-size 500
+```
+
+### 3. Fetch + Merge ERA5‑Land Weather
 First list months you need based on trajectory span:
 ```bash
 MONTHS=$(ls data/external/era5_cache/era5_*.nc \
@@ -228,7 +253,16 @@ python src/data/split_sequences.py \
 Outputs:\
 	•	train_idx.npy\
 	•	val_idx.npy
- > For fast experiments: slice these arrays ([:5_000_000]) before passing to training.
+
+#### Example Split Sizes (PoC run)
+
+| Split file        | Size (MB) | # sequences (approx) |
+|-------------------|-----------|----------------------|
+| train_idx.npy     | 175       | — |
+| test_idx.npy      | 90        | 11.8 M |
+| cold_idx.npy      | 65        | 8.5 M |
+| val_idx.npy       | 50        | — |
+| warm_test_idx.npy | 25        | 3.3 M |
 ___
 ## Known Limitations
 	•	Accuracy low @ Top-1 in PoC subset; Top-5 ~0.45–0.49 depending on run.
@@ -238,10 +272,24 @@ ___
 	•	MacBook-class hardware: Training times constrained; many scripts favor streaming + chunked HDF5.
 ---
 ## Citation / References
-> Zheng, Y., et al. Geolife GPS Trajectories. Microsoft Research Asia. 2007–2012.
-
-> Muñoz Sabater, J., et al. ERA5-Land Reanalysis. Copernicus Climate Change Service (C3S). ECMWF.
+> Moreira‑Matias, L., et al. **“Porto Taxi Trajectory Dataset and Trip Prediction.”** KDD Cup 2015.
 ---
+## Git Workflow
+
+This repository is *code‑only*. Large data artifacts and model checkpoints are ignored via `.gitignore`.  
+Typical workflow:
+
+```bash
+# Stage updated docs, scripts, and plot
+git add README.md report*.md scripts/ src/ eval_route_epoch7.png
+
+# Commit with a clear message
+git commit -m "Docs+scripts: full PoC workflow and evaluation plot"
+
+# Push (main or feature branch)
+git push origin main
+```
+
 ## Maintainer
 
 Dhinna Tretarnthip\
