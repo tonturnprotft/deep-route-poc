@@ -58,7 +58,7 @@ python src/models/train_route_lstm.py \
   --train-idx data/splits/porto_win10/train_idx.npy \
   --val-idx   data/splits/porto_win10/val_idx.npy \
   --subsample-train 8000000 \
-  --n-cells 92741 \
+  --n-cells 27025 \
   --win 8 \
   --batch-size 1024 \
   --epochs 5 \
@@ -143,7 +143,7 @@ Architecture\
 | `--train-idx`        | NumPy indices for training rows                        | `data/splits/train_idx.npy`         |
 | `--val-idx`          | NumPy indices for validation rows                      | `data/splits/val_idx.npy`           |
 | `--subsample-train`  | Use only first N train sequences (memory/time saver)   | `8000000`                           |
-| `--n-cells`          | Vocabulary size after remap                            | `92741`                             |
+| `--n-cells`          | Vocabulary size after remap                            | `27025`                             |
 | `--win`              | History length (timesteps)                             | `8`                                 |
 | `--batch-size`       | Minibatch size                                          | `1024`                              |
 | `--epochs`           | Training passes                                         | `5`                                 |
@@ -187,7 +187,6 @@ python src/data/porto_filter_year.py \
 python src/data/porto_clip_downsample.py \
   --in-csv  data/interim/porto_1yr.csv \
   --out     data/interim/porto_clipped.csv \
-  --ratio   0.4
 ```
 
 ### 2. Expand Trips & Grid‑Encode
@@ -246,8 +245,9 @@ Saves mapping & new HDF5 (n_cells printed).
 python src/data/split_sequences.py \
   --h5          data/processed/sequences_remap.h5 \
   --out-dir     data/splits \
-  --train-ratio 0.8 \
+  --train-ratio 0.7 \
   --cold-ratio  0.2 \
+  --test-ratio  0.1 \
   --seed        42
 ```
 Outputs:\
@@ -258,11 +258,11 @@ Outputs:\
 
 | Split file        | Size (MB) | # sequences (approx) |
 |-------------------|-----------|----------------------|
-| train_idx.npy     | 175       | 21.2 M |
-| test_idx.npy      | 90        | 11.8 M |
-| cold_idx.npy      | 65        | 8.5 M |
-| val_idx.npy       | 50        | — |
-| warm_test_idx.npy | 25        | 3.3 M |
+| train_idx.npy     | 175       | 22.8 M |
+| test_idx.npy      | 90        | 11.6 M |
+| cold_idx.npy      | 65        | 7.5 M |
+| val_idx.npy       | 50        | 7.064 |
+| warm_test_idx.npy | 25        | 4.1 M |
 ___
 ## Known Limitations
 	•	Achieved Top-1 accuracy of ~65% and Top-5 accuracy of ~95% on hold-out test set.
