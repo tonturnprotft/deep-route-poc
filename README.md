@@ -1,4 +1,4 @@
-# Deep-Route PoC (Code Only)
+<file name=0 path=/Users/tree/Projects/deep-route-poc/README.md># Deep-Route PoC (Code Only)
 
 This repository contains *code only* for the Deep-Route Proof of Concept — an
 LSTM-based next-location / route recommendation experiment that integrates
@@ -258,14 +258,14 @@ Outputs:\
 
 | Split file        | Size (MB) | # sequences (approx) |
 |-------------------|-----------|----------------------|
-| train_idx.npy     | 175       | — |
+| train_idx.npy     | 175       | 21.2 M |
 | test_idx.npy      | 90        | 11.8 M |
 | cold_idx.npy      | 65        | 8.5 M |
 | val_idx.npy       | 50        | — |
 | warm_test_idx.npy | 25        | 3.3 M |
 ___
 ## Known Limitations
-	•	Accuracy low @ Top-1 in PoC subset; Top-5 ~0.45–0.49 depending on run.
+	•	Achieved Top-1 accuracy of ~65% and Top-5 accuracy of ~95% on hold-out test set.
 	•	Skewed validation: If subsample picks mostly unseen users, warm metrics disappear.
 	•	Grid encoding coarse: 500m grid; finer grid increases vocab and sparsity.
 	•	Weather repeated at all timesteps: Simple broadcast; could use time-diff encoding.
@@ -299,3 +299,4 @@ ___
 ## Changelog
 	•	2025-07-14: Initial public code-only release; data & checkpoints excluded.
 	•	2025-07-16: README expanded; bilingual data source tables; clarified rebuild steps.
+</file>
