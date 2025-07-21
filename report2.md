@@ -6,7 +6,7 @@ Dhinna Tretarnthip
 
 Supervisor
 
-Professor
+Professor Tuna Çakar
 
 Date
 
